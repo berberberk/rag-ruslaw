@@ -16,3 +16,4 @@ CHANGELOG.md
 data/processed/
 data/index/
 .pytest_cache/
+uv.lock
