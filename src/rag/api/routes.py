@@ -12,8 +12,8 @@ from rag.ingest.preprocess import normalize_ruslawod_record
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
-CHUNK_SIZE = 1024
-OVERLAP = 64
+CHUNK_SIZE_CHARS = 1024
+OVERLAP_CHARS = 64
 
 
 def build_bm25_from_ruslawod_fixture() -> BM25Retriever:
@@ -27,7 +27,7 @@ def build_bm25_from_ruslawod_fixture() -> BM25Retriever:
     """
     rows = load_jsonl("data/fixtures/mini_docs.jsonl")
     docs = [normalize_ruslawod_record(r) for r in rows]
-    chunks = chunk_documents(docs, chunk_size=CHUNK_SIZE, overlap=OVERLAP)
+    chunks = chunk_documents(docs, chunk_size_chars=CHUNK_SIZE_CHARS, overlap_chars=OVERLAP_CHARS)
     return BM25Retriever.from_chunks(chunks)
 
 

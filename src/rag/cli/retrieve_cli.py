@@ -78,7 +78,9 @@ def build_retrievers(
     return retrievers
 
 
-def load_and_prepare_chunks(slice_path: Path, chunk_size: int, overlap: int) -> list[Chunk]:
+def load_and_prepare_chunks(
+    slice_path: Path, chunk_size_chars: int, overlap_chars: int
+) -> list[Chunk]:
     """
     Загрузка среза, нормализация и чанкинг.
 
@@ -86,9 +88,9 @@ def load_and_prepare_chunks(slice_path: Path, chunk_size: int, overlap: int) -> 
     ----------
     slice_path : Path
         Путь до gzipped JSONL
-    chunk_size : int
+    chunk_size_chars : int
         Размер чанка
-    overlap : int
+    overlap_chars : int
         Перекрытие чанков
 
     Returns
@@ -97,7 +99,7 @@ def load_and_prepare_chunks(slice_path: Path, chunk_size: int, overlap: int) -> 
         Список чанков
     """
     docs = load_documents_from_slice(slice_path)
-    chunks = chunk_documents(docs, chunk_size=chunk_size, overlap=overlap)
+    chunks = chunk_documents(docs, chunk_size_chars=chunk_size_chars, overlap_chars=overlap_chars)
     return chunks
 
 
@@ -114,7 +116,7 @@ def run_retrieval(args: argparse.Namespace) -> None:
     start = time.time()
     slice_path = Path(args.slice_path)
     logger.info("Чтение среза из %s", slice_path)
-    chunks = load_and_prepare_chunks(slice_path, args.chunk_size, args.overlap)
+    chunks = load_and_prepare_chunks(slice_path, args.chunk_size_chars, args.overlap_chars)
     logger.info("Готово: документов=%s, чанков=%s", len(set(c.doc_id for c in chunks)), len(chunks))
 
     use_dense = args.retriever in {"dense", "hybrid"}
@@ -164,8 +166,20 @@ def parse_args() -> argparse.Namespace:
         default=Path("data/raw/ruslawod_slice.jsonl.gz"),
         help="Путь до gzipped JSONL среза",
     )
-    parser.add_argument("--chunk-size", type=int, default=1024, help="Размер чанка в символах")
-    parser.add_argument("--overlap", type=int, default=64, help="Перекрытие чанков в символах")
+    import os
+
+    parser.add_argument(
+        "--chunk-size-chars",
+        type=int,
+        default=int(os.getenv("CHUNK_SIZE_CHARS", 1024)),
+        help="Размер чанка в символах",
+    )
+    parser.add_argument(
+        "--overlap-chars",
+        type=int,
+        default=int(os.getenv("OVERLAP_CHARS", 64)),
+        help="Перекрытие чанков в символах",
+    )
     return parser.parse_args()
 
 
