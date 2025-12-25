@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable, Iterable
+from time import monotonic
 
 import faiss
 import numpy as np
@@ -22,7 +23,10 @@ def _l2_normalize(vectors: np.ndarray) -> np.ndarray:
 
 
 def build_faiss_index(
-    chunks: Iterable[Chunk], embed_func: EmbedFunc
+    chunks: Iterable[Chunk],
+    embed_func: EmbedFunc,
+    *,
+    min_chunk_chars: int = 0,
 ) -> tuple[faiss.IndexFlatIP, list[Chunk]]:
     """
     Построить FAISS IndexFlatIP по чанкам.
@@ -33,6 +37,8 @@ def build_faiss_index(
         Коллекция чанков
     embed_func : Callable[[list[str]], np.ndarray]
         Функция получения эмбеддингов (batch)
+    min_chunk_chars : int, optional
+        Минимальная длина чанка; слишком короткие будут отброшены
 
     Returns
     -------
@@ -40,8 +46,13 @@ def build_faiss_index(
         Индекс и список чанков в порядке индекса
     """
     setup_logging()
-    chunk_list = list(chunks)
-    logger.info("Строим FAISS индекс по %s чанкам", len(chunk_list))
+    start = monotonic()
+    chunk_list = [c for c in chunks if len((c.text or "").strip()) >= min_chunk_chars]
+    if not chunk_list:
+        raise ValueError(
+            "Нет чанков для построения FAISS индекса (все пустые или слишком короткие)"
+        )
+    logger.info("Строим FAISS индекс по %s чанкам (min_len=%s)", len(chunk_list), min_chunk_chars)
 
     texts = [c.text for c in chunk_list]
     embeddings = embed_func(texts).astype(np.float32)
@@ -52,7 +63,12 @@ def build_faiss_index(
 
     index = faiss.IndexFlatIP(dim)
     index.add(embeddings)
-    logger.info("FAISS индекс построен: dim=%s", dim)
+    logger.info(
+        "FAISS индекс построен: dim=%s, vectors=%s, time=%.2fs",
+        dim,
+        embeddings.shape[0],
+        monotonic() - start,
+    )
     return index, chunk_list
 
 
@@ -62,11 +78,16 @@ class DenseRetriever(Retriever):
     """
 
     def __init__(
-        self, index: faiss.IndexFlatIP, chunks: list[Chunk], embed_func: EmbedFunc
+        self,
+        index: faiss.IndexFlatIP,
+        chunks: list[Chunk],
+        embed_passage: EmbedFunc,
+        embed_query: EmbedFunc | None = None,
     ) -> None:
         self._index = index
         self._chunks = chunks
-        self._embed = embed_func
+        self._embed_passage = embed_passage
+        self._embed_query = embed_query or embed_passage
 
     def retrieve(self, query: str, k: int) -> list[RetrievedChunk]:
         """
@@ -87,7 +108,7 @@ class DenseRetriever(Retriever):
         if not query:
             return []
 
-        query_vec = self._embed([query]).astype(np.float32)
+        query_vec = self._embed_query([query]).astype(np.float32)
         query_vec = _l2_normalize(query_vec)
         scores, indices = self._index.search(query_vec, min(k, len(self._chunks)))
 

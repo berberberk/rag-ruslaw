@@ -23,7 +23,8 @@ def build_retrievers(
     *,
     use_dense: bool = True,
     use_hybrid: bool = True,
-    embed_func_override=None,
+    embedder=None,
+    min_chunk_chars: int = 0,
 ) -> dict[str, object]:
     """
     Построение retriever'ов по чанкам.
@@ -36,6 +37,10 @@ def build_retrievers(
         Строить ли dense retriever
     use_hybrid : bool, optional
         Строить ли hybrid retriever
+    embedder : object, optional
+        Эмбеддер с методами encode_passages/encode_queries
+    min_chunk_chars : int, optional
+        Минимальная длина чанка для dense индекса
 
     Returns
     -------
@@ -49,26 +54,24 @@ def build_retrievers(
     retrievers["bm25"] = bm25
 
     if use_dense:
-        # Для CLI используем stub-эмбеддер фиксированной размерности 32 (офлайн, детерминированно),
-        # либо override для тестов.
-        def _stub_embed(texts: list[str]):
-            import numpy as np
+        if embedder is None:
+            from rag.embeddings.st import SentenceTransformerEmbeddings
 
-            vecs = []
-            for t in texts:
-                length = len(t.split())
-                vec = np.zeros(32, dtype=np.float32)
-                vec[0] = float(length)
-                vec[1] = float(len(t))
-                vecs.append(vec)
-            return np.stack(vecs, axis=0)
+            embedder = SentenceTransformerEmbeddings()
 
-        embed_func = embed_func_override or _stub_embed
-
-        index, chunk_order = build_faiss_index(chunk_list, embed_func)
-        embed_name = getattr(embed_func, "__name__", embed_func.__class__.__name__)
+        index, chunk_order = build_faiss_index(
+            chunk_list,
+            embedder.encode_passages,
+            min_chunk_chars=min_chunk_chars,
+        )
+        embed_name = embedder.__class__.__name__
         logger.info("Dense retriever: embedder=%s, dim=%s", embed_name, index.d)
-        dense = DenseRetriever(index=index, chunks=chunk_order, embed_func=embed_func)
+        dense = DenseRetriever(
+            index=index,
+            chunks=chunk_order,
+            embed_passage=embedder.encode_passages,
+            embed_query=embedder.encode_queries,
+        )
         retrievers["dense"] = dense
 
     if use_hybrid and "dense" in retrievers:
@@ -121,7 +124,22 @@ def run_retrieval(args: argparse.Namespace) -> None:
 
     use_dense = args.retriever in {"dense", "hybrid"}
     use_hybrid = args.retriever == "hybrid"
-    retrievers = build_retrievers(chunks, use_dense=use_dense, use_hybrid=use_hybrid)
+    embedder = None
+    if use_dense:
+        from rag.embeddings.st import SentenceTransformerEmbeddings
+
+        embedder = SentenceTransformerEmbeddings(
+            model_name=args.embedding_model,
+            batch_size=args.embedding_batch_size,
+        )
+
+    retrievers = build_retrievers(
+        chunks,
+        use_dense=use_dense,
+        use_hybrid=use_hybrid,
+        embedder=embedder,
+        min_chunk_chars=args.min_chunk_chars,
+    )
     if args.retriever not in retrievers:
         raise ValueError(f"Retriever '{args.retriever}' не поддерживается")
 
@@ -179,6 +197,24 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=int(os.getenv("OVERLAP_CHARS", 64)),
         help="Перекрытие чанков в символах",
+    )
+    parser.add_argument(
+        "--embedding-model",
+        type=str,
+        default=os.getenv("EMBEDDING_MODEL"),
+        help="Имя модели эмбеддингов (sentence-transformers)",
+    )
+    parser.add_argument(
+        "--embedding-batch-size",
+        type=int,
+        default=int(os.getenv("EMBEDDING_BATCH_SIZE", "32")),
+        help="Размер батча для эмбеддингов",
+    )
+    parser.add_argument(
+        "--min-chunk-chars",
+        type=int,
+        default=int(os.getenv("MIN_CHUNK_CHARS", "50")),
+        help="Минимальная длина чанка для dense индекса",
     )
     return parser.parse_args()
 
