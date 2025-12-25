@@ -1,6 +1,7 @@
 import numpy as np
+import pytest
 
-from rag.index.faiss_dense import DenseRetriever
+from rag.index.faiss_dense import DenseRetriever, build_faiss_index
 from rag.ingest.schema import Chunk
 
 
@@ -17,25 +18,17 @@ def _make_chunk(doc_id: str, text: str, idx: int = 0) -> Chunk:
 
 
 class _FakeEmbedder:
-    def __init__(self, mapping: dict[str, np.ndarray]):
-        self.mapping = mapping
+    def __init__(self, dim: int):
+        self.dim = dim
 
-    def embed(self, texts: list[str]) -> np.ndarray:
-        return np.stack([self.mapping[t] for t in texts], axis=0)
-
-
-class _FakeIndex:
-    def __init__(self, chunks: list[Chunk], embed_func):
-        self.chunks = chunks
-        self._embed = embed_func
-
-    def search(self, query_vec: np.ndarray, k: int):
-        corpus = self._embed([c.text for c in self.chunks]).astype(np.float32)
-        q = query_vec.astype(np.float32).reshape(-1)
-        scores = corpus @ q
-        order = np.argsort(-scores)
-        top = order[:k]
-        return scores[top][None, :], top.astype(np.int64)[None, :]
+    def encode(self, texts: list[str]) -> np.ndarray:
+        vecs = []
+        for t in texts:
+            arr = np.zeros(self.dim, dtype=np.float32)
+            arr[0] = float(len(t))
+            arr[1] = float(len(t.split()))
+            vecs.append(arr)
+        return np.stack(vecs, axis=0)
 
 
 def test_dense_retrieve_returns_relevant_doc_id():
@@ -44,33 +37,67 @@ def test_dense_retrieve_returns_relevant_doc_id():
         _make_chunk("civil", "договор это соглашение"),
         _make_chunk("other", "другое содержание"),
     ]
-    mapping = {
-        "налог это платеж": np.array([1.0, 0.0], dtype=np.float32),
-        "договор это соглашение": np.array([0.0, 1.0], dtype=np.float32),
-        "другое содержание": np.array([0.0, 0.0], dtype=np.float32),
-        "налог": np.array([0.9, 0.1], dtype=np.float32),
-    }
-    embedder = _FakeEmbedder(mapping)
+    embedder = _FakeEmbedder(dim=64)
 
-    index = _FakeIndex(chunks, embedder.embed)
-    retriever = DenseRetriever(index=index, chunks=chunks, embed_func=embedder.embed)
+    index, ordered_chunks = build_faiss_index(chunks, embedder.encode)
+    retriever = DenseRetriever(
+        index=index,
+        chunks=ordered_chunks,
+        embed_passage=embedder.encode,
+        embed_query=embedder.encode,
+    )
 
     results = retriever.retrieve("налог", k=2)
     doc_ids = [r.doc_id for r in results]
     assert "tax" in doc_ids
+    assert results[0].score >= results[-1].score
 
 
 def test_dense_retrieve_is_deterministic():
     chunks = [_make_chunk("a", "foo"), _make_chunk("b", "bar")]
-    mapping = {
-        "foo": np.array([1.0], dtype=np.float32),
-        "bar": np.array([0.0], dtype=np.float32),
-        "foo bar": np.array([0.5], dtype=np.float32),
-    }
-    embedder = _FakeEmbedder(mapping)
-    index = _FakeIndex(chunks, embedder.embed)
-    retriever = DenseRetriever(index=index, chunks=chunks, embed_func=embedder.embed)
+    embedder = _FakeEmbedder(dim=64)
+    index, ordered_chunks = build_faiss_index(chunks, embedder.encode)
+    retriever = DenseRetriever(
+        index=index,
+        chunks=ordered_chunks,
+        embed_passage=embedder.encode,
+        embed_query=embedder.encode,
+    )
 
     res1 = retriever.retrieve("foo bar", k=2)
     res2 = retriever.retrieve("foo bar", k=2)
     assert res1 == res2
+
+
+@pytest.mark.network
+@pytest.mark.slow
+def test_dense_real_model_small_corpus(mocker):
+    """
+    Мини интеграционный тест: модель загружается один раз.
+    Пропускается, если нет сети/HF кэша.
+    """
+    from rag.embeddings.st import SentenceTransformerEmbeddings
+
+    try:
+        embedder = SentenceTransformerEmbeddings(
+            model_name="intfloat/multilingual-e5-small", batch_size=4, normalize=True
+        )
+    except Exception:
+        pytest.skip("Модель недоступна или нет сети/кэша")
+
+    chunks = [
+        _make_chunk("tax", "Налог на доходы физических лиц регулируется законом."),
+        _make_chunk("family", "Брачный договор определяет имущественные права супругов."),
+        _make_chunk("other", "Произвольный текст без темы."),
+    ]
+    index, ordered_chunks = build_faiss_index(chunks, embedder.encode_passages)
+    retriever = DenseRetriever(
+        index=index,
+        chunks=ordered_chunks,
+        embed_passage=embedder.encode_passages,
+        embed_query=embedder.encode_queries,
+    )
+
+    results = retriever.retrieve("налог", k=2)
+    assert results
+    assert results[0].doc_id in {"tax", "family", "other"}

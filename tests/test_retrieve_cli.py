@@ -56,6 +56,9 @@ def test_run_retrieval_returns_expected_doc_id(monkeypatch, capsys, tmp_path: Pa
         slice_path=tmp_path / "dummy.gz",
         chunk_size_chars=128,
         overlap_chars=16,
+        embedding_model=None,
+        embedding_batch_size=32,
+        min_chunk_chars=0,
     )
 
     run_retrieval(args)
@@ -83,11 +86,17 @@ def test_retrieve_cli_builds_only_requested_retriever(monkeypatch):
 def test_dense_dim_guard(monkeypatch):
     import numpy as np
 
-    def _bad_embed(texts: list[str]):
-        return np.zeros((len(texts), 1), dtype=np.float32)
+    class _BadEmbedder:
+        def encode_passages(self, texts: list[str]):
+            return np.zeros((len(texts), 1), dtype=np.float32)
+
+        encode_queries = encode_passages
 
     chunk = _make_chunk("x", "text")
     with pytest.raises(ValueError):
         retrieve_cli.build_retrievers(
-            [chunk], use_dense=True, use_hybrid=False, embed_func_override=_bad_embed
+            [chunk],
+            use_dense=True,
+            use_hybrid=False,
+            embedder=_BadEmbedder(),
         )

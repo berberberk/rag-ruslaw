@@ -1,7 +1,11 @@
 import json
+import os
 from pathlib import Path
 
-from rag.eval.ragas_runner import RetrievalResult, save_summary
+from ragas.metrics._context_precision import IDBasedContextPrecision
+from ragas.metrics._context_recall import IDBasedContextRecall
+
+from rag.eval.ragas_runner import EvaluationConfig, RetrievalResult, run_ragas, save_summary
 
 
 def test_save_summary_creates_csv_and_json(tmp_path: Path):
@@ -18,3 +22,24 @@ def test_save_summary_creates_csv_and_json(tmp_path: Path):
     data = json.loads(out_json.read_text(encoding="utf-8"))
     assert data[0]["retriever"] == "bm25"
     assert data[0]["mean"] == 0.625
+
+
+def test_ragas_metrics_are_metric_objects():
+    metrics = [IDBasedContextPrecision(), IDBasedContextRecall()]
+    for metric in metrics:
+        assert hasattr(metric, "name")
+        assert metric.name
+
+
+def test_run_ragas_returns_empty_on_empty_evalset(tmp_path: Path):
+    evalset_path = tmp_path / "evalset.jsonl"
+    evalset_path.write_text("", encoding="utf-8")
+    cfg = EvaluationConfig(
+        evalset_path=evalset_path,
+        retrievers=["bm25"],
+        k=1,
+        output_dir=tmp_path,
+    )
+    results = run_ragas(cfg)
+    assert results == []
+    assert os.environ.get("KMP_DUPLICATE_LIB_OK", "").lower() == "true"
