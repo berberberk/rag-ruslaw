@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import os
 from collections.abc import Iterable
 from pathlib import Path
 from time import monotonic
 
 from rag.cli.retrieve_cli import build_retrievers
+from rag.embeddings.config import get_available_models, get_default_model, normalize_model_id
 from rag.embeddings.st import SentenceTransformerEmbeddings
 from rag.index.contracts import RetrievedChunk
 from rag.ingest.chunking import chunk_documents
@@ -132,3 +134,24 @@ def run_retrieval(
     results = retrievers[retriever_name].retrieve(query, k=k)
     _ = monotonic() - start
     return results
+
+
+def available_embedding_models() -> list[str]:
+    """
+    Возвращает список доступных embedding-моделей.
+    """
+    return get_available_models()
+
+
+def default_embedding_model() -> str:
+    """
+    Возвращает модель по умолчанию.
+    """
+    return os.getenv("EMBEDDING_MODEL") or get_default_model()
+
+
+def embedding_model_id(model_name: str) -> str:
+    """
+    Возвращает slug модели.
+    """
+    return normalize_model_id(model_name)
