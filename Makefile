@@ -1,4 +1,14 @@
-.PHONY: help venv sync lint format test test-network serve ui ingest build-index eval clean
+DATASET_ID ?= irlspbru/RusLawOD
+SPLIT ?= train
+N ?= 1000
+SEED ?= 42
+OUTPUT_DIR ?= data/raw
+STRATEGY ?= stream
+DATA_FILES ?=
+STATUS_FILTER ?=
+DOC_TYPE_FILTER ?=
+
+.PHONY: help venv sync lint format test test-network serve ui ingest build-index eval hf-slice clean
 
 help:
 	@echo "Targets:"
@@ -16,6 +26,7 @@ help:
 	@echo "  make ingest        - run ingestion script"
 	@echo "  make build-index   - build indexes (bm25/faiss)"
 	@echo "  make eval          - run RAGAS evaluation"
+	@echo "  make hf-slice      - slice HF dataset"
 	@echo "  make clean         - remove caches"
 
 venv:
@@ -57,6 +68,18 @@ build-index:
 
 eval:
 	uv run python scripts/evaluate.py
+
+hf-slice:
+	DATASET_ID=$(DATASET_ID) \
+	SPLIT=$(SPLIT) \
+	N=$(N) \
+	SEED=$(SEED) \
+	OUTPUT_DIR=$(OUTPUT_DIR) \
+	STRATEGY=$(STRATEGY) \
+	DATA_FILES="$(DATA_FILES)" \
+	STATUS_FILTER="$(STATUS_FILTER)" \
+	DOC_TYPE_FILTER="$(DOC_TYPE_FILTER)" \
+	uv run python scripts/hf_slice.py
 
 clean:
 	rm -rf .pytest_cache .ruff_cache __pycache__
