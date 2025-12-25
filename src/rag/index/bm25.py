@@ -1,113 +1,93 @@
 from __future__ import annotations
 
+import logging
 import re
-from typing import Iterable  # noqa: UP035
+from collections.abc import Iterable
 
 from rank_bm25 import BM25Okapi
 
-from rag.ingest.schema import Chunk, Document
+from rag.index.contracts import RetrievedChunk, Retriever
+from rag.ingest.schema import Chunk
+from rag.logging import setup_logging
+
+logger = logging.getLogger(__name__)
 
 
-class BM25Retriever:
+def tokenize(text: str) -> list[str]:
+    """
+    Детерминированная токенизация: нижний регистр, разбиение по не-буквенно-цифровым символам.
+
+    Parameters
+    ----------
+    text : str
+        Исходный текст
+
+    Returns
+    -------
+    list[str]
+        Токены без пустых значений
+    """
+    return [token for token in re.split(r"\W+", text.lower()) if token]
+
+
+class BM25Retriever(Retriever):
     """
     Лексический retriever на основе BM25Okapi.
     """
 
     def __init__(self, index: BM25Okapi, chunks: list[Chunk]) -> None:
-        """
-        Создание объекта BM25Retriever.
-
-        Parameters
-        ----------
-        index : BM25Okapi
-            Предподсчитанный индекс для корпуса
-        chunks : List[Chunk]
-            Список чанков, соответствующих строкам в индексе
-        """
         self._index = index
         self._chunks = chunks
 
     @classmethod
-    def from_documents(cls, documents: Iterable[Document]) -> BM25Retriever:
+    def from_chunks(cls, chunks: Iterable[Chunk]) -> BM25Retriever:
         """
-        Построение retriever из списка документов без предварительного чанкинга.
+        Построить retriever из коллекции чанков.
 
         Parameters
         ----------
-        documents : Iterable[Document]
-            Список нормализованных документов
+        chunks : Iterable[Chunk]
+            Коллекция чанков
 
         Returns
         -------
         BM25Retriever
-            Готовый retriever с индексом
+            Готовый retriever
         """
-        tokenized_corpus: list[list[str]] = []
-        chunks: list[Chunk] = []
-
-        for idx, doc in enumerate(documents):
-            tokens = cls._tokenize(doc.text)
-            tokenized_corpus.append(tokens)
-            chunk_id = f"{doc.doc_id}_chunk_{idx}"
-            chunks.append(
-                Chunk(
-                    doc_id=doc.doc_id,
-                    chunk_id=chunk_id,
-                    text=doc.text,
-                    metadata=doc.metadata,
-                    score=0.0,
-                    char_start=0,
-                    char_end=len(doc.text),
-                )
-            )
-
+        setup_logging()
+        chunk_list = list(chunks)
+        tokenized_corpus = [tokenize(c.text) for c in chunk_list]
+        logger.info("Строим BM25 индекс по %s чанкам", len(chunk_list))
         index = BM25Okapi(tokenized_corpus)
-        return cls(index=index, chunks=chunks)
+        return cls(index=index, chunks=chunk_list)
 
-    @staticmethod
-    def _tokenize(text: str) -> list[str]:
+    def retrieve(self, query: str, k: int) -> list[RetrievedChunk]:
         """
-        Детерминированная токенизация: приведение к нижнему регистру и разбиение по не-буквенно-цифровым символам.
-
-        Parameters
-        ----------
-        text : str
-            Исходный текст
-
-        Returns
-        -------
-        List[str]
-            Список токенов
-        """
-        return [token for token in re.split(r"\W+", text.lower()) if token]
-
-    def retrieve(self, query: str, k: int) -> list[Chunk]:
-        """
-        Получение top-k чанков по BM25.
+        Получение top-k чанков.
 
         Parameters
         ----------
         query : str
-            Текст запроса
+            Поисковый запрос
         k : int
-            Количество возвращаемых чанков
+            Количество чанков в ответе
 
         Returns
         -------
-        List[Chunk]
-            Отсортированный список чанков с присвоенными score
+        list[RetrievedChunk]
+            Список найденных чанков с score
         """
-        tokens = self._tokenize(query)
+        tokens = tokenize(query)
         scores = self._index.get_scores(tokens)
 
         sorted_indices = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)
         top_indices = sorted_indices[: min(k, len(self._chunks))]
 
-        results: list[Chunk] = []
+        results: list[RetrievedChunk] = []
         for idx in top_indices:
             chunk = self._chunks[idx]
             results.append(
-                Chunk(
+                RetrievedChunk(
                     doc_id=chunk.doc_id,
                     chunk_id=chunk.chunk_id,
                     text=chunk.text,
