@@ -33,11 +33,9 @@ lint-fix:
 format:
 	uv run ruff format .
 
-fmt:
-	format lint-fix
+fmt: format lint-fix
 
-check:
-	lint test
+check: lint test
 
 test:
 	uv run pytest
