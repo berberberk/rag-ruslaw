@@ -9,6 +9,8 @@ STATUS_FILTER ?=
 DOC_TYPE_FILTER ?=
 CHUNK_SIZE_CHARS ?= 1024
 OVERLAP_CHARS ?= 64
+RETRIEVERS ?= bm25,dense,hybrid
+K ?= 10
 
 .PHONY: help venv sync lint format test test-network serve ui ingest build-index eval hf-slice clean
 
@@ -113,6 +115,9 @@ eval-ragas:
 
 chunk-stats:
 	uv run python scripts/chunk_stats.py --chunk-size-chars $(CHUNK_SIZE_CHARS) --overlap-chars $(OVERLAP_CHARS)
+
+analyze-metrics:
+	uv run python scripts/analysis/plot_retrieval_metrics.py --summary results/ragas/summary.csv
 
 clean:
 	rm -rf .pytest_cache .ruff_cache __pycache__

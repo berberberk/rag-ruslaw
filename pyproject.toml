@@ -16,6 +16,9 @@ dependencies = [
   "rank-bm25>=0.2.2",
   "sentence-transformers>=2.6.0",
   "faiss-cpu>=1.8.0",
+  "matplotlib>=3.8.0",
+  "tabulate>=0.9.0",
+  "hf-transfer>=0.1.9",
 
   # LangChain / LLM (OpenRouter via OpenAI-compatible endpoint)
   "langchain>=0.2.0",
