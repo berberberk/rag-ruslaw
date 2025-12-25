@@ -7,11 +7,11 @@ def test_retrieve_endpoint_returns_k_chunks_from_ruslawod_fixture():
     app = create_app(test_mode=True)
     client = TestClient(app)
 
-    payload = {"query": "что такое налог", "k": 3, "retriever": "bm25"}
-    resp = client.post("/retrieve", json=payload)
+    resp = client.get("/retrieve", params={"query": "что такое налог", "k": 3, "retriever": "bm25"})
 
     assert resp.status_code == 200
     data = resp.json()
+    assert data["retriever"] == "bm25"
     assert "results" in data
     assert len(data["results"]) == 3
 

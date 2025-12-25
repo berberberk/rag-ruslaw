@@ -1,17 +1,40 @@
 from rag.index.bm25 import BM25Retriever
-from rag.ingest.load_dataset import load_jsonl
-from rag.ingest.preprocess import normalize_ruslawod_record
+from rag.ingest.chunking import chunk_document
+from rag.ingest.schema import Document
 
 
-def test_bm25_retriever_returns_expected_doc_in_topk_from_ruslawod_fixture():
-    rows = load_jsonl("data/fixtures/mini_docs.jsonl")
-    docs = [normalize_ruslawod_record(r) for r in rows]
+def test_bm25_retriever_returns_expected_doc():
+    docs = [
+        Document(doc_id="tax", title="", text="налог это платеж", metadata={"source": "t"}),
+        Document(doc_id="civil", title="", text="договор это соглашение", metadata={"source": "t"}),
+    ]
+    chunks = []
+    for doc in docs:
+        chunks.extend(chunk_document(doc, chunk_size=50, overlap=0))
 
-    retriever = BM25Retriever.from_documents(docs)
-    results = retriever.retrieve("что такое налог", k=2)
+    retriever = BM25Retriever.from_chunks(chunks)
+    results = retriever.retrieve("налог", k=1)
 
-    assert len(results) == 2
-    # В фикстурах "налог" есть в записи с doc_id 123456789
-    assert results[0].doc_id == "123456789"
-    assert results[0].score >= results[1].score
-    assert isinstance(results[0].text, str) and len(results[0].text) > 0
+    assert len(results) == 1
+    assert results[0].doc_id == "tax"
+    assert isinstance(results[0].score, float)
+
+
+def test_bm25_retriever_is_stable_between_calls():
+    doc = Document(doc_id="d1", title="", text="a b c", metadata={})
+    chunks = chunk_document(doc, chunk_size=10, overlap=0)
+    retriever = BM25Retriever.from_chunks(chunks)
+
+    res1 = retriever.retrieve("a", k=1)
+    res2 = retriever.retrieve("a", k=1)
+    assert res1 == res2
+
+
+def test_bm25_retriever_handles_empty_query_and_large_k():
+    doc = Document(doc_id="d2", title="", text="something", metadata={})
+    chunks = chunk_document(doc, chunk_size=5, overlap=0)
+    retriever = BM25Retriever.from_chunks(chunks)
+
+    results = retriever.retrieve("", k=10)
+    assert len(results) == len(chunks)
+    assert all(isinstance(r.score, float) for r in results)
