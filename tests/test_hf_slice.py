@@ -41,7 +41,6 @@ def test_build_hf_slice_raises_clear_error_on_missing_cache(monkeypatch, tmp_pat
 @pytest.mark.network
 @pytest.mark.slow
 def test_build_hf_slice_creates_gzip_and_manifest(tmp_path: Path):
-
     import logging
 
     logging.getLogger("datasets").setLevel(logging.INFO)
@@ -49,7 +48,6 @@ def test_build_hf_slice_creates_gzip_and_manifest(tmp_path: Path):
     logging.getLogger("fsspec").setLevel(logging.INFO)
     logging.getLogger("urllib3").setLevel(logging.WARNING)
     os.environ.setdefault("LOG_LEVEL", "INFO")
-
 
     pytest.importorskip("datasets")
 
