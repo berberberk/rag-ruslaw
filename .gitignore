@@ -17,6 +17,9 @@ data/processed/
 data/index/
 data/raw/
 data/eval/
+data/cache/
+results/
+reports/
 .hf_cache/
 .pytest_cache/
 uv.lock
