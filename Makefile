@@ -27,6 +27,7 @@ help:
 	@echo "  make build-index   - build indexes (bm25/faiss)"
 	@echo "  make eval          - run RAGAS evaluation"
 	@echo "  make hf-slice      - slice HF dataset"
+	@echo "  make retrieve      - offline CLI retrieval"
 	@echo "  make clean         - remove caches"
 
 venv:
@@ -80,6 +81,9 @@ hf-slice:
 	STATUS_FILTER="$(STATUS_FILTER)" \
 	DOC_TYPE_FILTER="$(DOC_TYPE_FILTER)" \
 	uv run python scripts/hf_slice.py
+
+retrieve:
+	uv run python scripts/retrieve_cli.py --query "$(QUERY)" --k $(K) --retriever $(RETRIEVER)
 
 clean:
 	rm -rf .pytest_cache .ruff_cache __pycache__
