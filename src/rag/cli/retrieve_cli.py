@@ -164,7 +164,7 @@ def parse_args() -> argparse.Namespace:
         default=Path("data/raw/ruslawod_slice.jsonl.gz"),
         help="Путь до gzipped JSONL среза",
     )
-    parser.add_argument("--chunk-size", type=int, default=512, help="Размер чанка в символах")
+    parser.add_argument("--chunk-size", type=int, default=1024, help="Размер чанка в символах")
     parser.add_argument("--overlap", type=int, default=64, help="Перекрытие чанков в символах")
     return parser.parse_args()
 

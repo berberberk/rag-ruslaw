@@ -156,7 +156,7 @@ def autolink_evalset_chunks(
         # построим bm25 по умолчанию
         slice_path = Path("data/raw/ruslawod_slice.jsonl.gz")
         docs = load_documents_from_slice(slice_path)
-        chunks = chunk_documents(docs, chunk_size=512, overlap=64)
+        chunks = chunk_documents(docs, chunk_size=1024, overlap=64)
         retriever = BM25Retriever.from_chunks(chunks)
 
     updated = []

@@ -12,7 +12,7 @@ from rag.ingest.preprocess import normalize_ruslawod_record
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
-CHUNK_SIZE = 512
+CHUNK_SIZE = 1024
 OVERLAP = 64
 
 

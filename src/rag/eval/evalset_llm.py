@@ -185,7 +185,7 @@ def generate_evalset_llm(
     # построим retriever при необходимости
     if retriever is None:
         # reuse chunking/retriever builder from CLI
-        chunks = load_and_prepare_chunks(slice_path, chunk_size=512, overlap=64)
+        chunks = load_and_prepare_chunks(slice_path, chunk_size=1024, overlap=64)
         retrievers = build_retrievers(
             chunks,
             use_dense=retriever_name in {"dense", "hybrid"},
