@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import gzip
-import json
 import logging
 import time
 from collections.abc import Iterable
@@ -13,37 +11,11 @@ from rag.index.contracts import RetrievedChunk
 from rag.index.faiss_dense import DenseRetriever, build_faiss_index
 from rag.index.hybrid import HybridRetriever
 from rag.ingest.chunking import chunk_documents
-from rag.ingest.preprocess import normalize_ruslawod_record
-from rag.ingest.schema import Chunk, Document
+from rag.ingest.load_dataset import load_documents_from_slice
+from rag.ingest.schema import Chunk
 from rag.logging import setup_logging
 
 logger = logging.getLogger(__name__)
-
-
-def load_slice(path: Path) -> list[dict]:
-    """
-    Загрузка gzip JSONL с RusLawOD срезом.
-
-    Parameters
-    ----------
-    path : Path
-        Путь до gzipped JSONL
-
-    Returns
-    -------
-    List[dict]
-        Сырые записи RusLawOD
-    """
-    if not path.exists():
-        raise FileNotFoundError(f"Slice not found: {path}")
-    rows: list[dict] = []
-    with gzip.open(path, "rt", encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            rows.append(json.loads(line))
-    return rows
 
 
 def build_retrievers(
@@ -51,6 +23,7 @@ def build_retrievers(
     *,
     use_dense: bool = True,
     use_hybrid: bool = True,
+    embed_func_override=None,
 ) -> dict[str, object]:
     """
     Построение retriever'ов по чанкам.
@@ -76,16 +49,26 @@ def build_retrievers(
     retrievers["bm25"] = bm25
 
     if use_dense:
-        # Для CLI используем очень простой embed_func на базе bm25 токенов (stub), чтобы не тянуть модель.
-        # В реальной фазе можно подключить sentence-transformers; здесь детерминированно и офлайн.
+        # Для CLI используем stub-эмбеддер фиксированной размерности 32 (офлайн, детерминированно),
+        # либо override для тестов.
         def _stub_embed(texts: list[str]):
             import numpy as np
 
-            # Bag-of-words длины 1 (число токенов)
-            return np.array([[len(t.split())] for t in texts], dtype=np.float32)
+            vecs = []
+            for t in texts:
+                length = len(t.split())
+                vec = np.zeros(32, dtype=np.float32)
+                vec[0] = float(length)
+                vec[1] = float(len(t))
+                vecs.append(vec)
+            return np.stack(vecs, axis=0)
 
-        index, chunk_order = build_faiss_index(chunk_list, _stub_embed)
-        dense = DenseRetriever(index=index, chunks=chunk_order, embed_func=_stub_embed)
+        embed_func = embed_func_override or _stub_embed
+
+        index, chunk_order = build_faiss_index(chunk_list, embed_func)
+        embed_name = getattr(embed_func, "__name__", embed_func.__class__.__name__)
+        logger.info("Dense retriever: embedder=%s, dim=%s", embed_name, index.d)
+        dense = DenseRetriever(index=index, chunks=chunk_order, embed_func=embed_func)
         retrievers["dense"] = dense
 
     if use_hybrid and "dense" in retrievers:
@@ -113,8 +96,7 @@ def load_and_prepare_chunks(slice_path: Path, chunk_size: int, overlap: int) -> 
     List[Chunk]
         Список чанков
     """
-    raw_rows = load_slice(slice_path)
-    docs: list[Document] = [normalize_ruslawod_record(r) for r in raw_rows]
+    docs = load_documents_from_slice(slice_path)
     chunks = chunk_documents(docs, chunk_size=chunk_size, overlap=overlap)
     return chunks
 
@@ -135,7 +117,9 @@ def run_retrieval(args: argparse.Namespace) -> None:
     chunks = load_and_prepare_chunks(slice_path, args.chunk_size, args.overlap)
     logger.info("Готово: документов=%s, чанков=%s", len(set(c.doc_id for c in chunks)), len(chunks))
 
-    retrievers = build_retrievers(chunks, use_dense=True, use_hybrid=True)
+    use_dense = args.retriever in {"dense", "hybrid"}
+    use_hybrid = args.retriever == "hybrid"
+    retrievers = build_retrievers(chunks, use_dense=use_dense, use_hybrid=use_hybrid)
     if args.retriever not in retrievers:
         raise ValueError(f"Retriever '{args.retriever}' не поддерживается")
 

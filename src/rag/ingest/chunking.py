@@ -98,6 +98,9 @@ def chunk_documents(
     doc_count = 0
 
     for doc in docs:
+        if not doc.text:
+            logger.warning("Документ %s пропущен из-за пустого текста", doc.doc_id)
+            continue
         doc_chunks = chunk_document(doc, chunk_size=chunk_size, overlap=overlap)
         all_chunks.extend(doc_chunks)
         doc_count += 1

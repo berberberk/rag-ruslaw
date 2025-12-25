@@ -46,10 +46,13 @@ def build_faiss_index(
     texts = [c.text for c in chunk_list]
     embeddings = embed_func(texts).astype(np.float32)
     embeddings = _l2_normalize(embeddings)
+    dim = embeddings.shape[1]
+    if dim < 32:
+        raise ValueError(f"Недопустимая размерность эмбеддингов: {dim} (ожидается >= 32)")
 
-    index = faiss.IndexFlatIP(embeddings.shape[1])
+    index = faiss.IndexFlatIP(dim)
     index.add(embeddings)
-    logger.info("FAISS индекс построен: dim=%s", embeddings.shape[1])
+    logger.info("FAISS индекс построен: dim=%s", dim)
     return index, chunk_list
 
 
