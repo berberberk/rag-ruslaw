@@ -10,7 +10,7 @@ def test_bm25_retriever_returns_expected_doc():
     ]
     chunks = []
     for doc in docs:
-        chunks.extend(chunk_document(doc, chunk_size=50, overlap=0))
+        chunks.extend(chunk_document(doc, chunk_size_chars=50, overlap_chars=0))
 
     retriever = BM25Retriever.from_chunks(chunks)
     results = retriever.retrieve("налог", k=1)
@@ -22,7 +22,7 @@ def test_bm25_retriever_returns_expected_doc():
 
 def test_bm25_retriever_is_stable_between_calls():
     doc = Document(doc_id="d1", title="", text="a b c", metadata={})
-    chunks = chunk_document(doc, chunk_size=10, overlap=0)
+    chunks = chunk_document(doc, chunk_size_chars=10, overlap_chars=0)
     retriever = BM25Retriever.from_chunks(chunks)
 
     res1 = retriever.retrieve("a", k=1)
@@ -32,7 +32,7 @@ def test_bm25_retriever_is_stable_between_calls():
 
 def test_bm25_retriever_handles_empty_query_and_large_k():
     doc = Document(doc_id="d2", title="", text="something", metadata={})
-    chunks = chunk_document(doc, chunk_size=5, overlap=0)
+    chunks = chunk_document(doc, chunk_size_chars=5, overlap_chars=0)
     retriever = BM25Retriever.from_chunks(chunks)
 
     results = retriever.retrieve("", k=10)

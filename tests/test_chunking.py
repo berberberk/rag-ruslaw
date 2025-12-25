@@ -4,7 +4,7 @@ from rag.ingest.schema import Document
 
 def test_chunk_count_simple_text():
     doc = Document(doc_id="doc1", title="", text="abcdef", metadata={"source": "test"})
-    chunks = chunk_document(doc, chunk_size=2, overlap=0)
+    chunks = chunk_document(doc, chunk_size_chars=2, overlap_chars=0)
 
     assert len(chunks) == 3
     assert [c.text for c in chunks] == ["ab", "cd", "ef"]
@@ -13,7 +13,7 @@ def test_chunk_count_simple_text():
 
 def test_chunk_overlap_correctness():
     doc = Document(doc_id="doc2", title="", text="abcdefgh", metadata={"source": "test"})
-    chunks = chunk_document(doc, chunk_size=4, overlap=2)
+    chunks = chunk_document(doc, chunk_size_chars=4, overlap_chars=2)
 
     assert len(chunks) == 3  # "abcd", "cdef", "efgh"
     for idx in range(len(chunks) - 1):
@@ -31,7 +31,7 @@ def test_chunk_metadata_preserved():
         metadata={"source": "RusLawOD", "doc_type": "law"},
     )
 
-    chunks = chunk_document(doc, chunk_size=3, overlap=1)
+    chunks = chunk_document(doc, chunk_size_chars=3, overlap_chars=1)
     assert len(chunks) == 3
 
     for idx, chunk in enumerate(chunks):
@@ -45,5 +45,5 @@ def test_chunk_metadata_preserved():
         assert chunk.metadata["char_end"] == chunk.char_end
 
     # batch helper preserves order and counts
-    batch_chunks = chunk_documents([doc], chunk_size=3, overlap=1)
+    batch_chunks = chunk_documents([doc], chunk_size_chars=3, overlap_chars=1)
     assert [c.chunk_id for c in batch_chunks] == [c.chunk_id for c in chunks]

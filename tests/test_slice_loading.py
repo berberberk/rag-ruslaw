@@ -29,7 +29,7 @@ def test_load_documents_from_normalized_slice(tmp_path: Path):
 
 def test_chunk_documents_produces_chunks():
     doc = Document(doc_id="d1", title="", text="abcdef", metadata={})
-    chunks = chunk_documents([doc], chunk_size=3, overlap=1)
+    chunks = chunk_documents([doc], chunk_size_chars=3, overlap_chars=1)
 
     assert len(chunks) > 0
     assert chunks[0].doc_id == "d1"

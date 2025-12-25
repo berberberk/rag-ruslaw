@@ -54,8 +54,8 @@ def test_run_retrieval_returns_expected_doc_id(monkeypatch, capsys, tmp_path: Pa
         k=2,
         retriever="bm25",
         slice_path=tmp_path / "dummy.gz",
-        chunk_size=128,
-        overlap=16,
+        chunk_size_chars=128,
+        overlap_chars=16,
     )
 
     run_retrieval(args)
