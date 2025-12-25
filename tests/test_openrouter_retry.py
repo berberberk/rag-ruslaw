@@ -1,4 +1,3 @@
-
 import pytest
 
 from rag.llm.openrouter import OpenRouterClient

@@ -1,4 +1,3 @@
-
 from rag.ingest.schema import Chunk
 from rag.rag_pipeline.generate import format_context
 
