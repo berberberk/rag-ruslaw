@@ -11,6 +11,24 @@ import requests
 logger = logging.getLogger(__name__)
 
 
+def get_llm_env_config() -> dict[str, Any]:
+    """
+    Возвращает конфигурацию OpenRouter из окружения.
+
+    Returns
+    -------
+    dict
+        {'api_key', 'model', 'models'}
+    """
+    api_key = os.getenv("RAG_OPENROUTER_API_KEY") or os.getenv("OPENROUTER_API_KEY") or ""
+    model = os.getenv("RAG_OPENROUTER_MODEL") or os.getenv("OPENROUTER_MODEL") or ""
+    models_env = os.getenv("RAG_OPENROUTER_MODELS") or ""
+    models = [m.strip() for m in models_env.split(",") if m.strip()]
+    if model and model not in models:
+        models.insert(0, model)
+    return {"api_key": api_key, "model": model, "models": models}
+
+
 class OpenRouterClient:
     """
     Клиент OpenRouter с ретраями.

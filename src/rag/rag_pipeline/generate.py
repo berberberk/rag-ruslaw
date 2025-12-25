@@ -72,6 +72,7 @@ def rag_answer(
     k: int,
     embedding_model: str | None = None,
     llm_client: OpenRouterClient | None = None,
+    llm_model: str | None = None,
     temperature: float = 0.1,
     max_tokens: int = 600,
 ) -> RagResponse:
@@ -90,6 +91,8 @@ def rag_answer(
         Модель эмбеддингов для dense/hybrid
     llm_client : OpenRouterClient, optional
         Клиент LLM
+    llm_model : str, optional
+        Имя модели LLM (переопределяет конфиг клиента)
 
     Returns
     -------
@@ -119,5 +122,7 @@ def rag_answer(
         )
 
     messages = build_prompt(query, context)
+    if llm_model and hasattr(llm_client, "model"):
+        llm_client.model = llm_model  # type: ignore[attr-defined]
     answer = llm_client.chat(messages, temperature=temperature, max_tokens=max_tokens)
     return RagResponse(answer=answer, citations=citations, retrieved_chunks=retrieved_chunks)
