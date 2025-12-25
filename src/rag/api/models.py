@@ -55,6 +55,9 @@ class RetrieveResponse(BaseModel):
     ----------
     results : list[RetrievedChunk]
         Список найденных чанков
+    retriever : str
+        Используемый retriever
     """
 
+    retriever: str
     results: list[RetrievedChunk]
