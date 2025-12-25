@@ -56,6 +56,10 @@ extend-exclude = ["data", ".venv", "notebooks"]
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
 ignore = ["E501"]  # allow long lines; formatter will handle most cases
+fixable = ["ALL"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["rag"]
 
 [tool.ruff.format]
 quote-style = "double"
