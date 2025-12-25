@@ -3,9 +3,13 @@ from __future__ import annotations
 import logging
 import os
 from functools import lru_cache
+from pathlib import Path
 
 import numpy as np
+from huggingface_hub import snapshot_download
 from sentence_transformers import SentenceTransformer
+
+from rag.embeddings.config import get_default_model
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +28,17 @@ def _get_device() -> str:
     return "cpu"
 
 
-@lru_cache(maxsize=1)
+def _cache_dir() -> Path:
+    """
+    Папка для кэша эмбеддингов в пределах репозитория или ENV.
+    """
+    env_cache = os.getenv("SENTENCE_TRANSFORMERS_HOME") or os.getenv("TRANSFORMERS_CACHE")
+    if env_cache:
+        return Path(env_cache)
+    return Path("data/cache/embeddings")
+
+
+@lru_cache(maxsize=4)
 def _load_model(model_name: str) -> SentenceTransformer:
     """
     Загружает и кеширует модель sentence-transformers.
@@ -39,8 +53,31 @@ def _load_model(model_name: str) -> SentenceTransformer:
     SentenceTransformer
         Загруженная модель
     """
-    logger.info("Загрузка модели эмбеддингов: %s", model_name)
-    return SentenceTransformer(model_name, device=_get_device())
+    cache_path = _cache_dir()
+    cache_path.mkdir(parents=True, exist_ok=True)
+    logger.info("Загрузка модели эмбеддингов: %s (cache=%s)", model_name, cache_path)
+    try:
+        return SentenceTransformer(
+            model_name,
+            device=_get_device(),
+            cache_folder=str(cache_path),
+            local_files_only=True,
+        )
+    except Exception as exc:
+        allow_download = os.getenv("EMBEDDING_ALLOW_DOWNLOAD", "").lower() == "true"
+        if not allow_download:
+            raise RuntimeError(
+                f"Модель {model_name} не найдена локально. "
+                "Скачайте её заранее при доступе к сети или установите EMBEDDING_ALLOW_DOWNLOAD=true."
+            ) from exc
+        # разрешаем однократную загрузку в кэш при явном разрешении
+        snapshot_download(repo_id=model_name, cache_dir=cache_path)
+        return SentenceTransformer(
+            model_name,
+            device=_get_device(),
+            cache_folder=str(cache_path),
+            local_files_only=True,
+        )
 
 
 class SentenceTransformerEmbeddings:
@@ -69,7 +106,7 @@ class SentenceTransformerEmbeddings:
         normalize : bool, optional
             Применять ли L2-нормализацию к вектору
         """
-        self.model_name = model_name or os.getenv("EMBEDDING_MODEL", DEFAULT_MODEL)
+        self.model_name = model_name or os.getenv("EMBEDDING_MODEL") or get_default_model()
         self.batch_size = batch_size or int(os.getenv("EMBEDDING_BATCH_SIZE", "32"))
         self.normalize = normalize
         self._model: SentenceTransformer | None = None

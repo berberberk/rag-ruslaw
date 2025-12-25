@@ -14,6 +14,7 @@ from ragas import EvaluationDataset, evaluate  # type: ignore
 from ragas.metrics._context_precision import IDBasedContextPrecision  # type: ignore
 from ragas.metrics._context_recall import IDBasedContextRecall  # type: ignore
 
+from rag.embeddings.config import get_available_models, get_default_model, normalize_model_id
 from rag.embeddings.st import SentenceTransformerEmbeddings
 from rag.index.bm25 import BM25Retriever
 from rag.index.contracts import RetrievedChunk
@@ -40,6 +41,7 @@ class EvaluationConfig:
     chunk_size_chars: int = 1024
     overlap_chars: int = 64
     embedding_model: str | None = None
+    embedding_models: list[str] | None = None
     embedding_batch_size: int = 32
     min_chunk_chars: int = 50
 
@@ -47,6 +49,7 @@ class EvaluationConfig:
 @dataclass
 class RetrievalResult:
     retriever: str
+    embedding_model: str
     k: int
     metric: str
     scores: list[float]
@@ -103,55 +106,70 @@ def run_ragas(config: EvaluationConfig) -> list[RetrievalResult]:
     )
     bm25 = BM25Retriever.from_chunks(chunks)
 
+    embedding_models = config.embedding_models or get_available_models()
+    if config.embedding_model:
+        embedding_models = [config.embedding_model]
+
     for name in config.retrievers:
         logger.info("Evaluating retriever=%s", name)
-        if name == "bm25":
-            retriever = bm25
-        elif name in {"dense", "hybrid"}:
-            embedder = SentenceTransformerEmbeddings(
-                model_name=config.embedding_model,
-                batch_size=config.embedding_batch_size,
-            )
-            index, chunk_order = build_faiss_index(
-                chunks,
-                embedder.encode_passages,
-                min_chunk_chars=config.min_chunk_chars,
-            )
-            dense = DenseRetriever(
-                index=index,
-                chunks=chunk_order,
-                embed_passage=embedder.encode_passages,
-                embed_query=embedder.encode_queries,
-            )
-            if name == "dense":
-                retriever = dense
+        model_list = ["none"] if name == "bm25" else embedding_models
+        for model_name in model_list:
+            em_id = "none" if model_name == "none" else normalize_model_id(model_name)
+            if name == "bm25":
+                retriever = bm25
+            elif name in {"dense", "hybrid"}:
+                embedder = SentenceTransformerEmbeddings(
+                    model_name=model_name if model_name != "none" else get_default_model(),
+                    batch_size=config.embedding_batch_size,
+                )
+                index, chunk_order = build_faiss_index(
+                    chunks,
+                    embedder.encode_passages,
+                    min_chunk_chars=config.min_chunk_chars,
+                )
+                dense = DenseRetriever(
+                    index=index,
+                    chunks=chunk_order,
+                    embed_passage=embedder.encode_passages,
+                    embed_query=embedder.encode_queries,
+                )
+                if name == "dense":
+                    retriever = dense
+                else:
+                    retriever = HybridRetriever(bm25_retriever=bm25, dense_retriever=dense)
             else:
-                retriever = HybridRetriever(bm25_retriever=bm25, dense_retriever=dense)
-        else:
-            logger.error("Неизвестный retriever=%s", name)
-            continue
-        df = _prepare_ragas_dataset(entries, retriever, config.k)
-        if df.empty:
-            logger.warning("Пустой датафрейм для retriever=%s, пропускаем", name)
-            continue
-        dataset = EvaluationDataset.from_pandas(df)
-        # Без LLM считаем ID-based метрики по chunk_id
-        metrics = [IDBasedContextPrecision(), IDBasedContextRecall()]
-        try:
-            ragas_res = evaluate(dataset, metrics=metrics)
-        except Exception as exc:  # pragma: no cover - ragas internals
-            logger.exception("RAGAS evaluation failed for %s: %s", name, exc)
-            continue
+                logger.error("Неизвестный retriever=%s", name)
+                continue
+            df = _prepare_ragas_dataset(entries, retriever, config.k)
+            if df.empty:
+                logger.warning("Пустой датафрейм для retriever=%s, пропускаем", name)
+                continue
+            dataset = EvaluationDataset.from_pandas(df)
+            metrics = [IDBasedContextPrecision(), IDBasedContextRecall()]
+            try:
+                ragas_res = evaluate(dataset, metrics=metrics)
+            except Exception as exc:  # pragma: no cover - ragas internals
+                logger.exception("RAGAS evaluation failed for %s (%s): %s", name, em_id, exc)
+                continue
 
-        per_question = ragas_res.to_pandas()
-        csv_path = config.output_dir / f"{name}_k{config.k}.csv"
-        per_question.to_csv(csv_path, index=False)
-        logger.info("Saved per-question metrics: %s", csv_path)
+            per_question = ragas_res.to_pandas()
+            per_question["embedding_model"] = em_id
+            csv_path = config.output_dir / f"{name}_{em_id}_k{config.k}.csv"
+            per_question.to_csv(csv_path, index=False)
+            logger.info("Saved per-question metrics: %s", csv_path)
 
-        for metric in metrics:
-            mname = metric.name
-            scores = per_question[mname].dropna().tolist()
-            results.append(RetrievalResult(retriever=name, k=config.k, metric=mname, scores=scores))
+            for metric in metrics:
+                mname = metric.name
+                scores = per_question[mname].dropna().tolist()
+                results.append(
+                    RetrievalResult(
+                        retriever=name,
+                        embedding_model=em_id,
+                        k=config.k,
+                        metric=mname,
+                        scores=scores,
+                    )
+                )
 
     if results:
         summary_csv = config.output_dir / "summary.csv"
@@ -186,6 +204,7 @@ def save_summary(results: list[RetrievalResult], csv_path: Path, json_path: Path
         summary_rows.append(
             {
                 "retriever": res.retriever,
+                "embedding_model": res.embedding_model,
                 "k": res.k,
                 "metric_name": res.metric,
                 "mean": m,
@@ -213,6 +232,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--overlap-chars", type=int, default=64)
     parser.add_argument("--embedding-model", type=str, default=os.getenv("EMBEDDING_MODEL"))
     parser.add_argument(
+        "--embedding-models",
+        type=str,
+        default=os.getenv("EMBEDDING_MODELS"),
+        help="Список моделей через запятую",
+    )
+    parser.add_argument(
         "--embedding-batch-size", type=int, default=int(os.getenv("EMBEDDING_BATCH_SIZE", "32"))
     )
     parser.add_argument(
@@ -232,6 +257,9 @@ def main() -> None:
         chunk_size_chars=args.chunk_size_chars,
         overlap_chars=args.overlap_chars,
         embedding_model=args.embedding_model,
+        embedding_models=[m.strip() for m in args.embedding_models.split(",")]
+        if args.embedding_models
+        else None,
         embedding_batch_size=args.embedding_batch_size,
         min_chunk_chars=args.min_chunk_chars,
     )
