@@ -10,8 +10,20 @@ from rag.eval.ragas_runner import EvaluationConfig, RetrievalResult, run_ragas, 
 
 def test_save_summary_creates_csv_and_json(tmp_path: Path):
     results = [
-        RetrievalResult(retriever="bm25", k=5, metric="context_precision", scores=[0.5, 0.75]),
-        RetrievalResult(retriever="dense", k=5, metric="context_precision", scores=[0.6]),
+        RetrievalResult(
+            retriever="bm25",
+            embedding_model="none",
+            k=5,
+            metric="context_precision",
+            scores=[0.5, 0.75],
+        ),
+        RetrievalResult(
+            retriever="dense",
+            embedding_model="MiniLM",
+            k=5,
+            metric="context_precision",
+            scores=[0.6],
+        ),
     ]
     out_csv = tmp_path / "summary.csv"
     out_json = tmp_path / "summary.json"
@@ -22,6 +34,7 @@ def test_save_summary_creates_csv_and_json(tmp_path: Path):
     data = json.loads(out_json.read_text(encoding="utf-8"))
     assert data[0]["retriever"] == "bm25"
     assert data[0]["mean"] == 0.625
+    assert data[0]["embedding_model"] == "none"
 
 
 def test_ragas_metrics_are_metric_objects():

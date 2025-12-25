@@ -1,5 +1,3 @@
-
-
 from rag.ingest.schema import Document
 from rag.ui.service import build_retrievers_for_ui, chunk_loaded_documents, run_retrieval
 

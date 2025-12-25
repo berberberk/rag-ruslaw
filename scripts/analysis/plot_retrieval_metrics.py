@@ -27,10 +27,14 @@ def load_summary(path: Path) -> pd.DataFrame:
         Датафрейм с колонками retriever, metric_name, mean, std
     """
     df = pd.read_csv(path)
-    expected = {"retriever", "metric_name", "mean", "std"}
+    expected = {"retriever", "metric_name", "mean"}
     missing = expected - set(df.columns)
     if missing:
         raise ValueError(f"Отсутствуют колонки в summary: {missing}")
+    if "std" not in df.columns:
+        df["std"] = pd.NA
+    if "embedding_model" not in df.columns:
+        df["embedding_model"] = "none"
     return df
 
 
