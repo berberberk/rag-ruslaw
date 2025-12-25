@@ -35,6 +35,7 @@ help:
 	@echo "  make evalset-autolink    - autolink draft evalset to chunks"
 	@echo "  make evalset-llm         - LLM-assisted evalset generation (network)"
 	@echo "  make evalset-validate    - validate evalset.jsonl"
+	@echo "  make eval-ragas          - RAGAS retrieval evaluation"
 	@echo "  make clean               - remove caches"
 
 venv:
@@ -106,6 +107,9 @@ evalset-llm:
 
 evalset-validate:
 	uv run python scripts/validate_evalset.py
+
+eval-ragas:
+	uv run python scripts/evaluate_ragas.py --retrievers $(RETRIEVERS) --k $(K)
 
 chunk-stats:
 	uv run python scripts/chunk_stats.py --chunk-size-chars $(CHUNK_SIZE_CHARS) --overlap-chars $(OVERLAP_CHARS)
