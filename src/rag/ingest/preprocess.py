@@ -1,23 +1,27 @@
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any
 
 from rag.ingest.schema import Document
 
 
-def normalize_ruslawod_record(rec: Dict[str, Any]) -> Document:
+def normalize_ruslawod_record(rec: dict[str, Any]) -> Document:
     """
-    Normalize one RusLawOD (pravogovruNd) record into internal Document schema.
-    Deterministic and offline-friendly.
+    Приведение записи RusLawOD к внутреннему типу `Document`.
 
-    Expected fields (subset):
-      - pravogovruNd (id)
-      - headingIPS (title)
-      - textIPS (main text)
-      - docdateIPS, docNumberIPS, doc_typeIPS, doc_author_normal_formIPS, signedIPS, statusIPS
-      - keywordsByIPS, classifierByIPS
+    Parameters
+    ----------
+    rec : Dict[str, Any]
+        Сырая запись RusLawOD (поля pravogovruNd, headingIPS, textIPS и др.)
+
+    Returns
+    -------
+    Document
+        Нормализованное представление с выделенными метаданными
     """
-    doc_id = str(rec.get("pravogovruNd") or rec.get("docNumberIPS") or rec.get("id") or "unknown")
+    doc_id = str(
+        rec.get("pravogovruNd") or rec.get("docNumberIPS") or rec.get("id") or "unknown"
+    ).strip()
     title = (rec.get("headingIPS") or "").strip()
     text = (rec.get("textIPS") or "").strip()
 
