@@ -16,6 +16,7 @@ CHANGELOG.md
 data/processed/
 data/index/
 data/raw/
+data/eval/
 .hf_cache/
 .pytest_cache/
 uv.lock
