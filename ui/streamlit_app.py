@@ -13,9 +13,12 @@ os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 import matplotlib.pyplot as plt
 import pandas as pd
 import streamlit as st
+from dotenv import load_dotenv
 
 from rag.eval.metrics_loader import load_metrics_from_results
+from rag.llm.openrouter import OpenRouterClient, get_llm_env_config
 from rag.logging import setup_logging
+from rag.rag_pipeline.generate import rag_answer
 from rag.ui.service import (
     available_embedding_models,
     build_retrievers_for_ui,
@@ -25,6 +28,7 @@ from rag.ui.service import (
     run_retrieval,
 )
 
+load_dotenv()
 setup_logging()
 
 SLICE_PATH_DEFAULT = Path("data/raw/ruslawod_slice.jsonl.gz")
@@ -72,6 +76,11 @@ def _load_metrics_cached(base_dir: Path):
     return df
 
 
+@st.cache_resource(show_spinner=False)
+def _llm_client_cached(model_name: str):
+    return OpenRouterClient(model=model_name)
+
+
 def main() -> None:
     st.set_page_config(page_title="RusLawOD Retrieval Explorer", layout="wide")
     st.title("RusLawOD Retrieval Explorer")
@@ -84,8 +93,8 @@ def main() -> None:
 
     docs, doc_count = _load_docs_cached(slice_path)
 
-    tab_retrieval, tab_diff, tab_metrics = st.tabs(
-        ["Retrieval Explorer", "Diff View", "Metrics Dashboard"]
+    tab_retrieval, tab_rag, tab_diff, tab_metrics = st.tabs(
+        ["Retrieval Explorer", "RAG Assistant", "Diff View", "Metrics Dashboard"]
     )
 
     with tab_retrieval:
@@ -209,6 +218,105 @@ def main() -> None:
                             st.write(snippet)
         elif search:
             st.warning("Введите непустой запрос")
+
+    with tab_rag:
+        st.subheader("RAG Assistant")
+        llm_cfg = get_llm_env_config()
+        retriever_rag = st.selectbox(
+            "Retriever (RAG)", ["bm25", "dense", "hybrid"], index=0, key="retriever_rag"
+        )
+        k_rag = st.slider("Top-k (RAG)", min_value=1, max_value=20, value=5, step=1, key="k_rag")
+        available_models = available_embedding_models()
+        default_model = default_embedding_model()
+        model_index = (
+            available_models.index(default_model) if default_model in available_models else 0
+        )
+        embed_model_rag = (
+            st.selectbox(
+                "Embedding model",
+                options=available_models,
+                index=model_index,
+                key="embed_model_rag",
+            )
+            if retriever_rag in {"dense", "hybrid"}
+            else None
+        )
+        llm_default = llm_cfg["model"]
+        llm_options = llm_cfg["models"] or ([llm_default] if llm_default else [])
+        llm_model = st.selectbox(
+            "LLM model (OpenRouter)",
+            options=llm_options or ["(заполните RAG_OPENROUTER_MODEL)"],
+            index=0 if llm_options else 0,
+        )
+        question = st.text_area(
+            "Вопрос", value="Как рассчитывается налог на доходы физических лиц?"
+        )
+        if st.button("Ask", type="primary", key="ask_rag"):
+            chunks_rag, _ = _chunk_docs_cached(docs, CHUNK_SIZE_DEFAULT, OVERLAP_DEFAULT)
+            try:
+                retrievers_rag = _build_retrievers_cached(
+                    chunks_rag,
+                    retriever_names=(retriever_rag,),
+                    embedding_model=embed_model_rag,
+                    embedding_batch_size=EMBED_BATCH_DEFAULT,
+                    min_chunk_chars=MIN_CHUNK_CHARS_DEFAULT,
+                )
+            except Exception as exc:
+                st.error(
+                    f"Не удалось построить retrievers: {exc}. "
+                    "Если модель эмбеддингов не скачана, включите EMBEDDING_ALLOW_DOWNLOAD=true при наличии сети."
+                )
+                return
+            if retriever_rag not in retrievers_rag:
+                st.error("Выбранный retriever недоступен")
+                return
+            if not llm_model:
+                st.error("Укажите модель LLM (RAG_OPENROUTER_MODEL) и ключ в окружении.")
+                return
+            if not llm_cfg["api_key"]:
+                st.error("Не найден API ключ (RAG_OPENROUTER_API_KEY или OPENROUTER_API_KEY).")
+                return
+            try:
+                client = _llm_client_cached(llm_model)
+            except Exception as exc:
+                st.error(f"LLM недоступен: {exc}")
+                return
+            start = time.time()
+            try:
+                response = rag_answer(
+                    question,
+                    retriever_func=lambda q, k, emb: retrievers_rag[retriever_rag].retrieve(q, k),
+                    k=k_rag,
+                    embedding_model=embed_model_rag,
+                    llm_client=client,
+                    llm_model=llm_model,
+                )
+            except Exception as exc:
+                st.error(f"Ошибка генерации: {exc}")
+                return
+            latency = time.time() - start
+            st.info(f"LLM модель: {llm_model} • Время ответа: {latency:.2f} c")
+            st.markdown("### Answer")
+            st.markdown(response.answer)
+            if not response.citations:
+                st.info("Недостаточно информации в предоставленном контексте.")
+            else:
+                st.markdown("### Citations")
+                for c in response.citations:
+                    st.write(
+                        f"- doc_id={c['doc_id']}, title={c.get('title') or '—'}, "
+                        f"date={c.get('docdate') or '—'}, type={c.get('doc_type') or '—'}, "
+                        f"number={c.get('doc_number') or '—'}"
+                    )
+            st.markdown("### Retrieved chunks")
+            grouped_r = defaultdict(list)
+            for ch in response.retrieved_chunks:
+                grouped_r[ch["doc_id"]].append(ch)
+            for doc_id, items in grouped_r.items():
+                with st.expander(f"{doc_id} ({len(items)} чанков)"):
+                    for item in sorted(items, key=lambda x: x["score"], reverse=True):
+                        st.markdown(f"**chunk_id:** {item['chunk_id']} • score={item['score']:.4f}")
+                        st.write(item["text_preview"])
 
     with tab_diff:
         st.subheader("Diff view (A vs B)")
