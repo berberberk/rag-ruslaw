@@ -281,10 +281,7 @@ def main() -> None:
         default=1.5,
         help="Базовый множитель экспоненциальной задержки",
     )
-    parser.add_argument(
-        "--data-files",
-        default=os.environ.get("DATA_FILES")
-    )
+    parser.add_argument("--data-files", default=os.environ.get("DATA_FILES"))
 
     parser.add_argument(
         "--status",
@@ -308,7 +305,6 @@ def main() -> None:
         for t in tokens:
             out.extend([p.strip() for p in t.split(",") if p.strip()])
         return out
-
 
     if args.status:
         filters["statusIPS"] = _split_csv_tokens(args.status)

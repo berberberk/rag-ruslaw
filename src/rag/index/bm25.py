@@ -56,6 +56,8 @@ class BM25Retriever:
                     text=doc.text,
                     metadata=doc.metadata,
                     score=0.0,
+                    char_start=0,
+                    char_end=len(doc.text),
                 )
             )
 

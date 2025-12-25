@@ -44,6 +44,10 @@ class Chunk:
         Метаданные, унаследованные от документа
     score : float
         Вес/оценка релевантности чанка
+    char_start : int
+        Начальная позиция чанка в тексте (включительно)
+    char_end : int
+        Конечная позиция чанка в тексте (исключительно)
     """
 
     doc_id: str
@@ -51,3 +55,5 @@ class Chunk:
     text: str
     metadata: dict[str, Any]
     score: float
+    char_start: int = 0
+    char_end: int = 0
