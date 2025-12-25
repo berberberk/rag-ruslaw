@@ -11,18 +11,50 @@ router = APIRouter()
 
 
 def build_bm25_from_ruslawod_fixture() -> BM25Retriever:
-    rows = load_jsonl("data/fixtures/ruslawod_mini.jsonl")
+    """
+    Построить BM25 retriever из локальных RusLawOD-совместимых фикстур.
+
+    Returns
+    -------
+    BM25Retriever
+        Готовый retriever, собранный из мини-фикстуры
+    """
+    rows = load_jsonl("data/fixtures/mini_docs.jsonl")
     docs = [normalize_ruslawod_record(r) for r in rows]
     return BM25Retriever.from_documents(docs)
 
 
 @router.post("/retrieve", response_model=RetrieveResponse)
 def retrieve(req: RetrieveRequest) -> RetrieveResponse:
+    """
+    Эндпоинт получения top-k чанков для заданного запроса.
+
+    Parameters
+    ----------
+    req : RetrieveRequest
+        Тело запроса
+
+    Returns
+    -------
+    RetrieveResponse
+        Результаты retrieval
+    """
     if req.retriever != "bm25":
-        raise HTTPException(status_code=400, detail="Only bm25 retriever is available in current MVP tests.")
+        raise HTTPException(
+            status_code=400, detail="Only bm25 retriever is available in current MVP tests."
+        )
 
     retriever = build_bm25_from_ruslawod_fixture()
     chunks = retriever.retrieve(req.query, k=req.k)
 
-    results = [RetrievedChunk(doc_id=c.doc_id, chunk_id=c.chunk_id, text=c.text, score=c.score) for c in chunks]
+    results = [
+        RetrievedChunk(
+            doc_id=c.doc_id,
+            chunk_id=c.chunk_id,
+            text=c.text,
+            score=c.score,
+            metadata=c.metadata,
+        )
+        for c in chunks
+    ]
     return RetrieveResponse(results=results)
