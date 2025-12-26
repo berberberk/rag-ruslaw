@@ -94,18 +94,18 @@ def main() -> None:
     docs, doc_count = _load_docs_cached(slice_path)
 
     tab_retrieval, tab_rag, tab_diff, tab_metrics = st.tabs(
-        ["Retrieval Explorer", "RAG Assistant", "Diff View", "Metrics Dashboard"]
+        ["Поиск (retrieval)", "RAG-ассистент", "Сравнение выдачи", "Метрики"]
     )
 
     with tab_retrieval:
         with st.sidebar:
             st.header("Параметры поиска")
             retriever = st.selectbox(
-                "Retriever", ["bm25", "dense", "hybrid"], index=0, key="retriever_main"
+                "Ретривер", ["bm25", "dense", "hybrid"], index=0, key="retriever_main"
             )
             k = st.slider("Top-k", min_value=1, max_value=50, value=10, step=1, key="k_main")
             chunk_size = st.number_input(
-                "Chunk size (chars)",
+                "Длина чанка (символы)",
                 value=CHUNK_SIZE_DEFAULT,
                 min_value=128,
                 max_value=4096,
@@ -113,7 +113,7 @@ def main() -> None:
                 key="chunk_size_main",
             )
             overlap = st.number_input(
-                "Overlap (chars)",
+                "Перекрытие (символы)",
                 value=OVERLAP_DEFAULT,
                 min_value=0,
                 max_value=512,
@@ -121,7 +121,7 @@ def main() -> None:
                 key="overlap_main",
             )
             min_chunk_chars = st.number_input(
-                "Min chunk length",
+                "Мин. длина чанка",
                 value=MIN_CHUNK_CHARS_DEFAULT,
                 min_value=0,
                 max_value=512,
@@ -135,7 +135,7 @@ def main() -> None:
             )
             embed_model = (
                 st.selectbox(
-                    "Embedding model",
+                    "Модель эмбеддингов",
                     options=available_models,
                     index=model_index,
                     key="embed_model_main",
@@ -144,21 +144,21 @@ def main() -> None:
                 else ""
             )
             embed_batch = st.number_input(
-                "Embedding batch size",
+                "Размер batch для эмбеддингов",
                 value=EMBED_BATCH_DEFAULT,
                 min_value=1,
                 max_value=128,
                 step=1,
                 key="embed_batch_main",
             )
-            st.markdown("Нажмите Search в основной области для запроса.")
+            st.markdown("Нажмите «Поиск» в основной области для запроса.")
 
         query = st.text_input(
             "Введите запрос",
             value="Какая процентная ставка по налогу на доходы физических лиц?",
             help="Введите текст запроса на русском",
         )
-        search = st.button("Search", type="primary")
+        search = st.button("Поиск", type="primary")
 
         chunks, chunk_count = _chunk_docs_cached(docs, chunk_size, overlap)
         try:
@@ -194,11 +194,11 @@ def main() -> None:
             doc_counts = [len(v) for v in grouped.values()] or [0]
             coverage = unique_docs / max(1, k)
             dominance = max(doc_counts) / max(1, len(results))
-            st.subheader("Quick Stats")
+            st.subheader("Быстрые метрики")
             cols = st.columns(3)
-            cols[0].metric("Unique docs", unique_docs)
-            cols[1].metric("Doc coverage", f"{coverage:.2f}")
-            cols[2].metric("Top doc dominance", f"{dominance:.2f}")
+            cols[0].metric("Уникальные doc_id", unique_docs)
+            cols[1].metric("Покрытие doc_id", f"{coverage:.2f}")
+            cols[2].metric("Доля top doc", f"{dominance:.2f}")
 
             for doc_id, items in grouped.items():
                 items_sorted = sorted(items, key=lambda x: x.score, reverse=True)
@@ -220,10 +220,10 @@ def main() -> None:
             st.warning("Введите непустой запрос")
 
     with tab_rag:
-        st.subheader("RAG Assistant")
+        st.subheader("RAG-ассистент")
         llm_cfg = get_llm_env_config()
         retriever_rag = st.selectbox(
-            "Retriever (RAG)", ["bm25", "dense", "hybrid"], index=0, key="retriever_rag"
+            "Ретривер (RAG)", ["bm25", "dense", "hybrid"], index=0, key="retriever_rag"
         )
         k_rag = st.slider("Top-k (RAG)", min_value=1, max_value=20, value=5, step=1, key="k_rag")
         available_models = available_embedding_models()
@@ -233,7 +233,7 @@ def main() -> None:
         )
         embed_model_rag = (
             st.selectbox(
-                "Embedding model",
+                "Модель эмбеддингов",
                 options=available_models,
                 index=model_index,
                 key="embed_model_rag",
@@ -244,14 +244,14 @@ def main() -> None:
         llm_default = llm_cfg["model"]
         llm_options = llm_cfg["models"] or ([llm_default] if llm_default else [])
         llm_model = st.selectbox(
-            "LLM model (OpenRouter)",
+            "Модель LLM (OpenRouter)",
             options=llm_options or ["(заполните RAG_OPENROUTER_MODEL)"],
             index=0 if llm_options else 0,
         )
         question = st.text_area(
             "Вопрос", value="Как рассчитывается налог на доходы физических лиц?"
         )
-        if st.button("Ask", type="primary", key="ask_rag"):
+        if st.button("Спросить", type="primary", key="ask_rag"):
             chunks_rag, _ = _chunk_docs_cached(docs, CHUNK_SIZE_DEFAULT, OVERLAP_DEFAULT)
             try:
                 retrievers_rag = _build_retrievers_cached(
@@ -296,19 +296,19 @@ def main() -> None:
                 return
             latency = time.time() - start
             st.info(f"LLM модель: {llm_model} • Время ответа: {latency:.2f} c")
-            st.markdown("### Answer")
+            st.markdown("### Ответ")
             st.markdown(response.answer)
             if not response.citations:
                 st.info("Недостаточно информации в предоставленном контексте.")
             else:
-                st.markdown("### Citations")
+                st.markdown("### Цитаты")
                 for c in response.citations:
                     st.write(
                         f"- doc_id={c['doc_id']}, title={c.get('title') or '—'}, "
                         f"date={c.get('docdate') or '—'}, type={c.get('doc_type') or '—'}, "
                         f"number={c.get('doc_number') or '—'}"
                     )
-            st.markdown("### Retrieved chunks")
+            st.markdown("### Найденные чанки")
             grouped_r = defaultdict(list)
             for ch in response.retrieved_chunks:
                 grouped_r[ch["doc_id"]].append(ch)
@@ -319,27 +319,27 @@ def main() -> None:
                         st.write(item["text_preview"])
 
     with tab_diff:
-        st.subheader("Diff view (A vs B)")
+        st.subheader("Сравнение выдачи (A vs B)")
         col_a, col_b = st.columns(2)
         with col_a:
-            retr_a = st.selectbox("Retriever A", ["bm25", "dense", "hybrid"], key="retr_a")
+            retr_a = st.selectbox("Ретривер A", ["bm25", "dense", "hybrid"], key="retr_a")
             model_a = ""
             if retr_a in {"dense", "hybrid"}:
                 model_a = st.selectbox(
-                    "Embedding model A", options=available_models, index=0, key="model_a"
+                    "Модель эмбеддингов A", options=available_models, index=0, key="model_a"
                 )
         with col_b:
-            retr_b = st.selectbox("Retriever B", ["bm25", "dense", "hybrid"], key="retr_b")
+            retr_b = st.selectbox("Ретривер B", ["bm25", "dense", "hybrid"], key="retr_b")
             model_b = ""
             if retr_b in {"dense", "hybrid"}:
                 model_b = st.selectbox(
-                    "Embedding model B",
+                    "Модель эмбеддингов B",
                     options=available_models,
                     index=min(1, len(available_models) - 1),
                     key="model_b",
                 )
         chunk_size_diff = st.number_input(
-            "Chunk size (diff)",
+            "Длина чанка (сравнение)",
             value=CHUNK_SIZE_DEFAULT,
             min_value=128,
             max_value=4096,
@@ -347,7 +347,7 @@ def main() -> None:
             key="chunk_size_diff",
         )
         overlap_diff = st.number_input(
-            "Overlap (diff)",
+            "Перекрытие (сравнение)",
             value=OVERLAP_DEFAULT,
             min_value=0,
             max_value=512,
@@ -355,16 +355,16 @@ def main() -> None:
             key="overlap_diff",
         )
         min_chunk_diff = st.number_input(
-            "Min chunk length (diff)",
+            "Мин. длина чанка (сравнение)",
             value=MIN_CHUNK_CHARS_DEFAULT,
             min_value=0,
             max_value=512,
             step=10,
             key="min_chunk_diff",
         )
-        k_diff = st.slider("Top-k (diff)", 1, 20, 5, key="k_diff")
-        query_diff = st.text_input("Query (diff)", value="договор", key="query_diff")
-        if st.button("Compare", key="compare_diff"):
+        k_diff = st.slider("Top-k (сравнение)", 1, 20, 5, key="k_diff")
+        query_diff = st.text_input("Запрос для сравнения", value="договор", key="query_diff")
+        if st.button("Сравнить", key="compare_diff"):
             try:
                 chunks_diff, _ = _chunk_docs_cached(docs, chunk_size_diff, overlap_diff)
                 retrievers_a = _build_retrievers_cached(
