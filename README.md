@@ -20,7 +20,7 @@ graph TD
     D --> F[Hybrid Fusion]
     E --> F
     F --> G[Retrieval API/CLI/UI]
-    G --> H[RAG Answer (LLM + citations)]
+    G --> H[RAG Answer LLM + citationss]
     G --> I[Оценка RAGAS/метрики]
 ```
 
@@ -77,7 +77,7 @@ sequenceDiagram
     participant L as OpenRouter LLM
     U->>R: query, k, retriever
     R->>P: top-k chunks
-    P->>L: prompt (context-only)
+    P->>L: prompt, context-only
     L-->>U: answer + citations + chunks
 ```
 - Форматирование контекста: `format_context(chunks, max_chars=16000, per_chunk_chars=1800)` — нумерация, doc_id, title, docdate, chunk_id, обрезка текста.
@@ -107,7 +107,7 @@ flowchart LR
 ```mermaid
 graph TD
     User --> Tabs[Вкладки UI]
-    Tabs --> Explorer[Поиск (retrieval)]
+    Tabs --> Explorer[Retrieval]
     Tabs --> RAG[RAG-ассистент]
     Tabs --> Diff[Сравнение выдачи]
     Tabs --> Metrics[Метрики/графики]
@@ -223,11 +223,6 @@ LOG_FILE=logs/app.log   # опционально
 - **UI пустой список моделей LLM**: убедитесь, что `RAG_OPENROUTER_MODEL` или `RAG_OPENROUTER_MODELS` заданы, `.env` загружается через `load_dotenv()`.
 - **Dense/Hybrid в UI падает**: проверьте наличие эмбеддингов; если кэша нет — включите `EMBEDDING_ALLOW_DOWNLOAD=true` и перезапустите с сетью.
 
-## Расширение и план
-- Roadmap: `ROADMAP.md` (фазы 1–11, текущий прогресс), история изменений — `CHANGELOG.md`, правила — `AGENTS.md`.
-- Расширение FastAPI (реальный /query) и дополнительные метрики/графики — будущая работа.
-- Возможные next steps: улучшение prompt’ов, оптимизация FAISS, добавление hybrid весов, экспорт результатов для отчётов.
-
 ## Дополнительные Mermaid диаграммы
 ### End-to-end пайплайн
 ```mermaid
@@ -239,7 +234,7 @@ graph TD
   CHUNK --> IDX2[FAISS Dense]
   IDX1 --> HYB[Hybrid]
   IDX2 --> HYB
-  HYB --> RETRIEVE[Retrieval (CLI/UI/API)]
+  HYB --> RETRIEVE[Retrieval, CLI/UI/API]
   RETRIEVE --> RAG[RAG Answer (LLM+citations)]
   RETRIEVE --> EVAL[Metrics/RAGAS]
 ```
@@ -277,4 +272,4 @@ flowchart TD
 ```
 
 ---
-README покрывает основные модули, команды и подводные камни. Для деталей фаз см. `ROADMAP.md`; для изменений — `CHANGELOG.md`; для правил — `AGENTS.md`. README готов для включения в отчёт и демонстрации преподавателю. 
+
