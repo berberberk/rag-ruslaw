@@ -1,5 +1,3 @@
-import os
-
 from rag.llm.openrouter import get_llm_env_config
 
 
