@@ -1,13 +1,13 @@
 DATASET_ID ?= irlspbru/RusLawOD
 SPLIT ?= train
-N ?= 1000
+N ?= 10000
 SEED ?= 42
 OUTPUT_DIR ?= data/raw
 STRATEGY ?= stream
 DATA_FILES ?=
 STATUS_FILTER ?=
 DOC_TYPE_FILTER ?=
-CHUNK_SIZE_CHARS ?= 1024
+CHUNK_SIZE_CHARS ?= 4096
 OVERLAP_CHARS ?= 64
 RETRIEVERS ?= bm25,dense,hybrid
 K ?= 10
@@ -39,6 +39,7 @@ help:
 	@echo "  make evalset-validate    - validate evalset.jsonl"
 	@echo "  make eval-ragas          - RAGAS retrieval evaluation"
 	@echo "  make clean               - remove caches"
+	@echo "  make demo-notebook       - run Jupyter Lab for demo notebook"
 
 venv:
 	uv venv
@@ -118,6 +119,9 @@ chunk-stats:
 
 analyze-metrics:
 	uv run python scripts/analysis/plot_retrieval_metrics.py --summary results/ragas/summary.csv
+
+demo-notebook:
+	uv run jupyter lab
 
 clean:
 	rm -rf .pytest_cache .ruff_cache __pycache__
