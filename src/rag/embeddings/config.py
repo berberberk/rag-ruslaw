@@ -5,9 +5,9 @@ import re
 
 # Базовый список лёгких моделей (офлайн, CPU)
 DEFAULT_MODELS = [
+    "intfloat/multilingual-e5-small",
     "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
     "sentence-transformers/paraphrase-multilingual-MiniLM-L6-v2",
-    "intfloat/multilingual-e5-small",
 ]
 
 
